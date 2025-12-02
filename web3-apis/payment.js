@@ -2,7 +2,7 @@ import { ethers } from 'ethers';
 
 // simple timestamped logger
 function ts(...args) {
-  const t = new Date().toISOString();
+  const t = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', hour12: false });
   // eslint-disable-next-line no-console
   console.log(`[${t}]`, ...args);
 }
