@@ -5,6 +5,13 @@ import cors from 'cors';
 import 'dotenv/config';
 import web3Apis from './web3-apis/index.js';
 
+// timestamped logger
+function ts(...args) {
+  const t = new Date().toISOString();
+  // eslint-disable-next-line no-console
+  console.log(`[${t}]`, ...args);
+}
+
 const app = express();
 app.use(cors());
 app.use(express.json());
@@ -19,12 +26,12 @@ const RPC_URL = process.env.RPC_URL;
 
 // Validate environment variables
 if (!CONTRACT_ADDRESS) {
-  console.error("❌ CONTRACT_ADDRESS not set in .env");
+  ts("CONTRACT_ADDRESS not set in .env");
   process.exit(1);
 }
 
 if (!RELAYER_PRIVATE_KEY) {
-  console.error("❌ RELAYER_PRIVATE_KEY not set in .env");
+  ts("RELAYER_PRIVATE_KEY not set in .env");
   process.exit(1);
 }
 
@@ -50,15 +57,15 @@ const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, relayerWall
   try {
     const balance = await provider.getBalance(relayerWallet.address);
     const balanceAVAX = ethers.formatEther(balance);
-    console.log("💰 Relayer Balance:", balanceAVAX, "AVAX");
+    ts("Relayer Balance:", balanceAVAX, "AVAX");
     
     if (parseFloat(balanceAVAX) < 0.1) {
-      console.log("⚠️  WARNING: Low AVAX balance!");
-      console.log("   Please fund relayer wallet:", relayerWallet.address);
+      ts("WARNING: Low AVAX balance");
+      ts("   Please fund relayer wallet:", relayerWallet.address);
     }
-    console.log("\n" + "─".repeat(60) + "\n");
+    ts("" + "-".repeat(60));
   } catch (error) {
-    console.error("❌ Failed to check relayer balance:", error.message);
+    ts("Failed to check relayer balance:", error.message);
   }
 })();
 
@@ -78,7 +85,7 @@ app.use('/api', web3Apis);
 // ============ ERROR HANDLING ============
 
 app.use((err, req, res, next) => {
-  console.error("❌ Unhandled error:", err);
+  ts("Unhandled error:", err);
   res.status(500).json({
     error: "Internal server error",
     message: err.message
@@ -89,6 +96,6 @@ app.use((err, req, res, next) => {
 
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
-  console.log("✅ Server started successfully!");
-  console.log("🔗 Listening on port:", PORT);
+  ts("Server started successfully");
+  ts("Listening on port:", PORT);
 });

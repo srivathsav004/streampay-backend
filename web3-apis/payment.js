@@ -1,5 +1,12 @@
 import { ethers } from 'ethers';
 
+// simple timestamped logger
+function ts(...args) {
+  const t = new Date().toISOString();
+  // eslint-disable-next-line no-console
+  console.log(`[${t}]`, ...args);
+}
+
 /**
  * Universal payment endpoint for all services
  */
@@ -15,48 +22,48 @@ async function executePayment(req, res) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
-    console.log("\n" + "═".repeat(60));
-    console.log("📥 NEW PAYMENT REQUEST");
-    console.log("═".repeat(60));
-    console.log("🏷️  Service Type:", serviceType);
-    console.log("🆔 Session ID:", paymentIntent.sessionId);
-    console.log("👤 Payer:", paymentIntent.payer);
+    ts("\n" + "=".repeat(60));
+    ts("NEW PAYMENT REQUEST");
+    ts("=".repeat(60));
+    ts("Service Type:", serviceType);
+    ts("Session ID:", paymentIntent.sessionId);
+    ts("Payer:", paymentIntent.payer);
     // Normalize incoming amount for logging
     const normalizedAmount = typeof paymentIntent.amount === 'string' || typeof paymentIntent.amount === 'number'
       ? BigInt(paymentIntent.amount)
       : BigInt(paymentIntent.amount?.toString?.() ?? 0);
-    console.log("💵 Amount:", ethers.formatUnits(normalizedAmount, 6), "USDC");
-    console.log("📊 Metadata:", JSON.stringify(metadata || {}, null, 2));
+    ts("Amount:", ethers.formatUnits(normalizedAmount, 6), "USDC");
+    ts("Metadata:", JSON.stringify(metadata || {}, null, 2));
 
     // Check user balance
     const balance = await contract.getBalance(paymentIntent.payer);
     const balanceUSDC = ethers.formatUnits(balance, 6);
     const amountUSDC = ethers.formatUnits(normalizedAmount, 6);
     
-    console.log("\n💰 Balance Check:");
-    console.log("   User Balance:", balanceUSDC, "USDC");
-    console.log("   Required:", amountUSDC, "USDC");
+    ts("\nBalance Check:");
+    ts("   User Balance:", balanceUSDC, "USDC");
+    ts("   Required:", amountUSDC, "USDC");
 
     if (BigInt(balance) < normalizedAmount) {
-      console.log("   ❌ INSUFFICIENT BALANCE");
+      ts("   INSUFFICIENT BALANCE");
       return res.status(400).json({
         error: 'Insufficient escrow balance',
         balance: balanceUSDC,
         required: amountUSDC
       });
     }
-    console.log("   ✅ Sufficient balance");
+    ts("   Sufficient balance");
 
     // Check if already settled
     const isSettled = await contract.isSessionSettled(paymentIntent.sessionId);
     if (isSettled) {
-      console.log("\n❌ Session already settled");
+      ts("\nSession already settled");
       return res.status(400).json({ error: 'Session already settled' });
     }
 
     // Submit transaction (SERVER WALLET PAYS GAS)
-    console.log("\n📤 Submitting Transaction:");
-    console.log("   Gas payer:", relayerWallet.address);
+    ts("\nSubmitting Transaction:");
+    ts("   Gas payer:", relayerWallet.address);
     
     // Normalize the struct for v6 (ensure numeric fields are BigInt)
     const normalizedIntent = {
@@ -77,13 +84,13 @@ async function executePayment(req, res) {
       serviceType
     );
 
-    console.log("   ⏳ Tx Hash:", tx.hash);
+    ts("   Tx Hash:", tx.hash);
     // tx.gasPrice may be null in v6 with EIP-1559; log if available
     const pendingGasPrice = tx.gasPrice != null ? ethers.formatUnits(tx.gasPrice, 'gwei') : 'N/A';
-    console.log("   ⛽ Gas Price:", pendingGasPrice, "gwei");
+    ts("   Gas Price:", pendingGasPrice, "gwei");
 
     // Wait for confirmation
-    console.log("\n⏳ Waiting for confirmation...");
+    ts("\nWaiting for confirmation...");
     const receipt = await tx.wait();
 
     // Calculate costs
@@ -95,17 +102,17 @@ async function executePayment(req, res) {
     const gasCostUSD = parseFloat(ethers.formatEther(gasCostAVAX)) * 40; // Assume $40/AVAX
     const processingTime = Date.now() - startTime;
 
-    console.log("\n✅ TRANSACTION CONFIRMED");
-    console.log("   Block:", receipt.blockNumber);
-    console.log("   Gas Used:", gasUsed.toString());
-    console.log("   Gas Cost:", ethers.formatEther(gasCostAVAX), "AVAX (~$" + gasCostUSD.toFixed(2) + ")");
-    console.log("   Processing Time:", processingTime, "ms");
-    console.log("\n💸 Payment Flow:");
-    console.log("   From:", paymentIntent.payer, "(escrow)");
-    console.log("   To:", SERVICE_WALLET, "(service wallet)");
-    console.log("   Amount:", amountUSDC, "USDC");
-    console.log("   Gas Paid By:", relayerWallet.address, "(server wallet)");
-    console.log("═".repeat(60) + "\n");
+    ts("\nTRANSACTION CONFIRMED");
+    ts("   Block:", receipt.blockNumber);
+    ts("   Gas Used:", gasUsed.toString());
+    ts("   Gas Cost:", ethers.formatEther(gasCostAVAX), "AVAX (~$" + gasCostUSD.toFixed(2) + ")");
+    ts("   Processing Time:", processingTime, "ms");
+    ts("\nPayment Flow:");
+    ts("   From:", paymentIntent.payer, "(escrow)");
+    ts("   To:", SERVICE_WALLET, "(service wallet)");
+    ts("   Amount:", amountUSDC, "USDC");
+    ts("   Gas Paid By:", relayerWallet.address, "(server wallet)");
+    ts("=".repeat(60) + "\n");
 
     res.json({
       success: true,
@@ -121,11 +128,11 @@ async function executePayment(req, res) {
     });
 
   } catch (error) {
-    console.error("\n❌ TRANSACTION FAILED");
-    console.error("   Error:", error.message);
-    if (error.reason) console.error("   Reason:", error.reason);
-    if (error.data?.message) console.error("   Details:", error.data.message);
-    console.log("═".repeat(60) + "\n");
+    ts("\nTRANSACTION FAILED");
+    ts("   Error:", error.message);
+    if (error.reason) ts("   Reason:", error.reason);
+    if (error.data?.message) ts("   Details:", error.data.message);
+    ts("=".repeat(60) + "\n");
 
     res.status(500).json({
       error: error.message,
