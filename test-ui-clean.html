@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>StreamPay Backend Test</title>
+    <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
+    <style>
+        body {
+            font-family: 'Consolas', 'Monaco', monospace;
+            background: #000;
+            color: #fff;
+            margin: 0;
+            padding: 20px;
+            font-size: 14px;
+        }
+        
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        
+        .header {
+            border-bottom: 1px solid #333;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .section {
+            margin-bottom: 30px;
+        }
+        
+        .section h3 {
+            color: #fff;
+            margin-bottom: 10px;
+        }
+        
+        button {
+            background: #111;
+            color: #fff;
+            border: 1px solid #333;
+            padding: 8px 16px;
+            margin: 5px 5px 5px 0;
+            cursor: pointer;
+            font-family: monospace;
+        }
+        
+        button:hover {
+            background: #222;
+        }
+        
+        button:disabled {
+            background: #080808;
+            color: #666;
+            cursor: not-allowed;
+        }
+        
+        input, select {
+            background: #111;
+            color: #fff;
+            border: 1px solid #333;
+            padding: 6px;
+            margin: 5px 0;
+            font-family: monospace;
+        }
+        
+        .log {
+            background: #0a0a0a;
+            border: 1px solid #333;
+            padding: 10px;
+            margin: 10px 0;
+            height: 500px;
+            overflow-y: auto;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 12px;
+            white-space: pre-wrap;
+        }
+        
+        .log-line {
+            margin: 2px 0;
+        }
+        
+        .log-time {
+            color: #666;
+            margin-right: 10px;
+        }
+        
+        .log-info { color: #fff; }
+        .log-success { color: #fff; }
+        .log-warning { color: #fff; }
+        .log-error { color: #fff; }
+        
+        .grid {
+            display: grid;
+            grid-template-columns: 200px 1fr;
+            gap: 20px;
+        }
+        
+        .service-card {
+            background: #111;
+            border: 1px solid #333;
+            padding: 10px;
+            margin: 5px 0;
+        }
+        
+        .service-price {
+            color: #fff;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>StreamPay Backend Test Interface</h1>
+        </div>
+
+        <div class="section">
+            <h3>Connection</h3>
+            <button id="connectBtn">Connect Wallet</button>
+            <button id="disconnectBtn" style="display:none;">Disconnect</button>
+        </div>
+
+        <div class="section">
+            <h3>Services</h3>
+            <div class="service-card">
+                <div>Video Streaming - 0.04 USDC/hour</div>
+            </div>
+            <div class="service-card">
+                <div>API Services - 0.02 USDC/1000 calls</div>
+            </div>
+            <div class="service-card">
+                <div>File Storage - 0.01 USDC/GB/month</div>
+            </div>
+        </div>
+
+        <div class="section">
+            <h3>Actions</h3>
+            <div class="grid">
+                <div>
+                    <button id="balanceBtn" disabled>Check Balance</button><br>
+                    <button id="depositBtn" disabled>Deposit 1 USDC</button><br>
+                    <button id="nonceBtn" disabled>Get Nonce</button>
+                </div>
+                <div>
+                    <select id="serviceSelect">
+                        <option value="video-streaming">Video Streaming (0.04 USDC)</option>
+                        <option value="api-services">API Services (0.02 USDC)</option>
+                        <option value="file-storage">File Storage (0.01 USDC)</option>
+                    </select><br>
+                    <button id="signBtn" disabled>1. Sign Payment</button><br>
+                    <button id="executeBtn" disabled>2. Execute via Relayer</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="section">
+            <h3>Terminal Log</h3>
+            <div id="log" class="log"></div>
+            <button id="clearLogBtn">Clear Log</button>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:3001/api';
+        let provider, signer, userAddress, contract;
+        
+        const CONTRACT_ADDRESS = "0xd2A6D88468507C180eDC482458f666ec298D39Aa";
+        const USDC_ADDRESS = "0x5425890298aed601595a70AB815c96711a31Bc65"; // Avalanche Fuji Testnet USDC
+        
+        const CONTRACT_ABI = [
+            "function deposit(uint256 amount) external",
+            "function getNonce(address user) external view returns (uint256)",
+            "function getBalance(address user) external view returns (uint256)",
+            "function getDomainSeparator() external view returns (bytes32)",
+            "function getInfo() external view returns (address usdc, address service, string name, string version)"
+        ];
+        
+        const USDC_ABI = [
+            "function approve(address spender, uint256 amount) external returns (bool)",
+            "function balanceOf(address account) external view returns (uint256)",
+            "function decimals() external view returns (uint8)"
+        ];
+
+        const SERVICE_PRICES = {
+            'video-streaming': '0.04',
+            'api-services': '0.02',
+            'file-storage': '0.01'
+        };
+
+        function log(message, type = 'info') {
+            const logEl = document.getElementById('log');
+            const time = new Date().toLocaleTimeString();
+            const line = document.createElement('div');
+            line.className = `log-line log-${type}`;
+            line.innerHTML = `<span class="log-time">[${time}]</span>${message}`;
+            logEl.appendChild(line);
+            logEl.scrollTop = logEl.scrollHeight;
+        }
+
+        function clearLog() {
+            document.getElementById('log').innerHTML = '';
+            log('Terminal cleared');
+        }
+
+        async function connectWallet() {
+            try {
+                if (!window.ethereum) throw new Error('MetaMask not installed');
+                
+                await window.ethereum.request({ method: 'eth_requestAccounts' });
+                provider = new ethers.providers.Web3Provider(window.ethereum);
+                signer = provider.getSigner();
+                userAddress = await signer.getAddress();
+                contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, signer);
+                
+                document.getElementById('connectBtn').style.display = 'none';
+                document.getElementById('disconnectBtn').style.display = 'inline-block';
+                document.querySelectorAll('button:not(#clearLogBtn)').forEach(btn => btn.disabled = false);
+                
+                log(`Connected: ${userAddress}`);
+                
+                const network = await provider.getNetwork();
+                if (network.chainId !== 43113) {
+                    log(`Warning: Not on Avalanche Fuji (Chain ID: ${network.chainId})`);
+                }
+                
+            } catch (error) {
+                log(`Connection failed: ${error.message}`);
+            }
+        }
+
+        async function disconnect() {
+            provider = null; signer = null; userAddress = null; contract = null;
+            document.getElementById('connectBtn').style.display = 'inline-block';
+            document.getElementById('disconnectBtn').style.display = 'none';
+            document.querySelectorAll('button:not(#connectBtn,#clearLogBtn)').forEach(btn => btn.disabled = true);
+            log('Disconnected');
+        }
+
+        async function checkBalance() {
+            try {
+                log('Checking balances...');
+                
+                const [balanceRes, usdcBalance] = await Promise.all([
+                    fetch(`${API_BASE}/balance/${userAddress}`),
+                    new ethers.Contract(USDC_ADDRESS, USDC_ABI, signer).balanceOf(userAddress)
+                ]);
+                
+                const data = await balanceRes.json();
+                
+                if (balanceRes.ok) {
+                    log(`Wallet USDC: ${ethers.utils.formatUnits(usdcBalance, 6)}`);
+                    log(`Escrow USDC: ${data.balanceUSDC}`);
+                } else {
+                    throw new Error(data.error);
+                }
+            } catch (error) {
+                log(`Balance check failed: ${error.message}`);
+            }
+        }
+
+        async function deposit() {
+            try {
+                log('Depositing 1 USDC to escrow...');
+                
+                // Check USDC balance first
+                const usdcContract = new ethers.Contract(USDC_ADDRESS, USDC_ABI, signer);
+                const balance = await usdcContract.balanceOf(userAddress);
+                log(`Current USDC balance: ${ethers.utils.formatUnits(balance, 6)}`);
+                
+                if (balance.lt(ethers.utils.parseUnits('1', 6))) {
+                    log('Error: Insufficient USDC balance. You need at least 1 USDC.');
+                    return;
+                }
+                
+                const amount = ethers.utils.parseUnits('1', 6);
+                
+                log('Approving USDC...');
+                const approveTx = await usdcContract.approve(CONTRACT_ADDRESS, amount);
+                await approveTx.wait();
+                log(`Approved: ${approveTx.hash}`);
+                
+                log('Depositing to escrow...');
+                const depositTx = await contract.deposit(amount);
+                await depositTx.wait();
+                log(`Deposited: ${depositTx.hash}`);
+                
+            } catch (error) {
+                log(`Deposit failed: ${error.message}`);
+                if (error.code === 'UNPREDICTABLE_GAS_LIMIT') {
+                    log('Possible causes:');
+                    log('1. Contract not deployed at this address');
+                    log('2. Wrong USDC address for testnet');
+                    log('3. Insufficient balance or allowance');
+                    log('4. Contract function reverted');
+                }
+            }
+        }
+
+        async function getNonce() {
+            try {
+                log('Getting nonce...');
+                const res = await fetch(`${API_BASE}/nonce/${userAddress}`);
+                const data = await res.json();
+                
+                if (res.ok) {
+                    log(`Current nonce: ${data.nonce}`);
+                } else {
+                    throw new Error(data.error);
+                }
+            } catch (error) {
+                log(`Nonce fetch failed: ${error.message}`);
+            }
+        }
+
+        async function signPayment() {
+            try {
+                const serviceType = document.getElementById('serviceSelect').value;
+                const price = SERVICE_PRICES[serviceType];
+                const amountWei = ethers.utils.parseUnits(price, 6);
+                const sessionId = ethers.utils.keccak256(ethers.utils.toUtf8Bytes(Date.now().toString() + userAddress));
+                
+                log(`Preparing payment for ${serviceType} (${price} USDC)...`);
+                
+                const nonceRes = await fetch(`${API_BASE}/nonce/${userAddress}`);
+                const nonceData = await nonceRes.json();
+                
+                if (!nonceRes.ok) throw new Error(nonceData.error);
+                
+                const nonce = nonceData.nonce;
+                const deadline = Math.floor(Date.now() / 1000) + 3600;
+                
+                const paymentIntent = {
+                    payer: userAddress,
+                    sessionId: sessionId,
+                    amount: amountWei.toString(),
+                    deadline: deadline,
+                    nonce: nonce
+                };
+                
+                log('Creating EIP-712 signature...');
+                
+                const domain = {
+                    name: 'StreamPay',
+                    version: '1',
+                    chainId: 43113,
+                    verifyingContract: CONTRACT_ADDRESS
+                };
+                
+                const types = {
+                    PaymentIntent: [
+                        {name: 'payer', type: 'address'},
+                        {name: 'sessionId', type: 'bytes32'},
+                        {name: 'amount', type: 'uint256'},
+                        {name: 'deadline', type: 'uint256'},
+                        {name: 'nonce', type: 'uint256'}
+                    ]
+                };
+                
+                const signature = await signer._signTypedData(domain, types, paymentIntent);
+                
+                window.currentPayment = {
+                    paymentIntent: {...paymentIntent, signature},
+                    serviceType,
+                    amount: price,
+                    sessionId
+                };
+                
+                log(`Payment signed (off-chain)`);
+                log(`Session: ${sessionId.substring(0, 10)}...`);
+                log(`Amount: ${price} USDC`);
+                log(`Nonce: ${nonce}`);
+                log(`Signature: ${signature.substring(0, 20)}...`);
+                
+                document.getElementById('executeBtn').disabled = false;
+                
+            } catch (error) {
+                log(`Signing failed: ${error.message}`);
+            }
+        }
+
+        async function executePayment() {
+            try {
+                if (!window.currentPayment) throw new Error('No payment data found');
+                
+                log('Sending to relayer for execution...');
+                
+                const res = await fetch(`${API_BASE}/execute-payment`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(window.currentPayment)
+                });
+                
+                const data = await res.json();
+                
+                if (res.ok) {
+                    log(`Payment executed via relayer`);
+                    log(`Tx Hash: ${data.txHash}`);
+                    log(`Block: ${data.blockNumber}`);
+                    log(`Gas Used: ${data.gasUsed}`);
+                    log(`Gas Cost: ${data.gasCostAVAX} AVAX (~$${data.gasCostUSD})`);
+                    log(`Processing Time: ${data.processingTime}`);
+                    
+                    window.currentPayment = null;
+                    document.getElementById('executeBtn').disabled = true;
+                } else {
+                    throw new Error(data.error);
+                }
+            } catch (error) {
+                log(`Execution failed: ${error.message}`);
+            }
+        }
+
+        // Event listeners
+        document.getElementById('connectBtn').onclick = connectWallet;
+        document.getElementById('disconnectBtn').onclick = disconnect;
+        document.getElementById('balanceBtn').onclick = checkBalance;
+        document.getElementById('depositBtn').onclick = deposit;
+        document.getElementById('nonceBtn').onclick = getNonce;
+        document.getElementById('signBtn').onclick = signPayment;
+        document.getElementById('executeBtn').onclick = executePayment;
+        document.getElementById('clearLogBtn').onclick = clearLog;
+
+        // Initialize
+        window.onload = () => {
+            log('StreamPay Backend Test Interface loaded');
+        };
+    </script>
+</body>
+</html>
