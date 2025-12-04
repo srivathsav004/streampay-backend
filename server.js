@@ -4,6 +4,7 @@ import { ethers } from 'ethers';
 import cors from 'cors';
 import 'dotenv/config';
 import web3Apis from './web3-apis/index.js';
+import web2Apis from './web2-apis/index.js';
 import { supabase } from './web2-apis/db.js';
 
 // timestamped logger
@@ -73,7 +74,7 @@ const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, relayerWall
 // Test Supabase connection on startup
 (async () => {
   try {
-    const { data, error } = await supabase.from('users').select('count').limit(1);
+    const { data, error } = await supabase.from('users').select('id').limit(1);
     if (error) {
       ts("Supabase connection failed:", error.message);
     } else {
@@ -100,6 +101,7 @@ app.locals.db = supabase;
 
 // Mount API routes
 app.use('/api', web3Apis);
+app.use('/api/web2', web2Apis);
 
 // ============ ERROR HANDLING ============
 
