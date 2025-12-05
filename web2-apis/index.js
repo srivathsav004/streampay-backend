@@ -1,6 +1,7 @@
 // web2-apis/index.js
 import express from 'express';
 import { supabase } from './db.js';
+import aiRouter from './ai.js';
 
 const router = express.Router();
 
@@ -8,6 +9,8 @@ const router = express.Router();
 router.get('/health', (req, res) => {
   return res.json({ ok: true, service: 'web2-apis' });
 });
+
+router.use('/ai', aiRouter);
 
 // Upsert a user profile by address (per schema: id, address, created_at)
 router.post('/users/upsert', async (req, res) => {
