@@ -113,6 +113,14 @@ app.use((err, req, res, next) => {
   });
 });
 
+// Health check endpoint
+app.get('/health', (req, res) => {
+  res.status(200).json({ 
+    status: 'ok', 
+    timestamp: new Date().toISOString() 
+  });
+});
+
 // ============ START SERVER ============
 
 const PORT = process.env.PORT || 3001;
