@@ -2,93 +2,11 @@ import express from 'express';
 import { supabase } from './db.js';
 
 const router = express.Router();
+ 
 
-const PER_CALL_USDC = 0.001;
-
-router.post('/session/start', async (req, res) => {
+router.post('/stats', async (req, res) => {
   try {
-    const { user_address } = req.body || {};
-    if (!user_address) return res.status(400).json({ error: 'user_address is required' });
-    const payload = {
-      user_address: String(user_address).toLowerCase(),
-      calls_count: 0,
-      amount_usdc: 0,
-      tx_hash: null,
-    };
-    const { data, error } = await supabase
-      .from('api_sessions')
-      .insert(payload)
-      .select('id, user_address, calls_count, amount_usdc, tx_hash, created_at')
-      .limit(1);
-    if (error) return res.status(500).json({ error: error.message });
-    return res.json({ success: true, session: data?.[0] || null });
-  } catch (e) {
-    return res.status(500).json({ error: e?.message || 'Internal error' });
-  }
-});
-
-router.post('/chat', async (req, res) => {
-  try {
-    const { session_id, user_address, message } = req.body || {};
-    if (!session_id) return res.status(400).json({ error: 'session_id is required' });
-    if (!user_address) return res.status(400).json({ error: 'user_address is required' });
-
-    const { data: existing, error: fetchErr } = await supabase
-      .from('api_sessions')
-      .select('id, calls_count, amount_usdc')
-      .eq('id', session_id)
-      .eq('user_address', String(user_address).toLowerCase())
-      .maybeSingle();
-    if (fetchErr) return res.status(500).json({ error: fetchErr.message });
-    if (!existing) return res.status(404).json({ error: 'session not found' });
-
-    const nextCalls = (existing.calls_count || 0) + 1;
-    const nextAmount = Number(existing.amount_usdc || 0) + PER_CALL_USDC;
-
-    const { data: updated, error: upErr } = await supabase
-      .from('api_sessions')
-      .update({ calls_count: nextCalls, amount_usdc: nextAmount })
-      .eq('id', session_id)
-      .select('id, user_address, calls_count, amount_usdc, tx_hash, created_at')
-      .limit(1);
-    if (upErr) return res.status(500).json({ error: upErr.message });
-
-    const assistant = `This is a sample response for: "${String(message || '').slice(0, 200)}"`;
-    return res.json({
-      success: true,
-      reply: assistant,
-      cost: PER_CALL_USDC,
-      session: updated?.[0] || null,
-    });
-  } catch (e) {
-    return res.status(500).json({ error: e?.message || 'Internal error' });
-  }
-});
-
-router.post('/session/settle', async (req, res) => {
-  try {
-    const { session_id, user_address, tx_hash } = req.body || {};
-    if (!session_id) return res.status(400).json({ error: 'session_id is required' });
-    if (!user_address) return res.status(400).json({ error: 'user_address is required' });
-    if (!tx_hash) return res.status(400).json({ error: 'tx_hash is required' });
-
-    const { data, error } = await supabase
-      .from('api_sessions')
-      .update({ tx_hash })
-      .eq('id', session_id)
-      .eq('user_address', String(user_address).toLowerCase())
-      .select('id, user_address, calls_count, amount_usdc, tx_hash, created_at')
-      .limit(1);
-    if (error) return res.status(500).json({ error: error.message });
-    return res.json({ success: true, session: data?.[0] || null });
-  } catch (e) {
-    return res.status(500).json({ error: e?.message || 'Internal error' });
-  }
-});
-
-router.get('/stats', async (req, res) => {
-  try {
-    const user_address = String(req.query.user_address || '').toLowerCase();
+    const user_address = String((req.body?.user_address) || '').toLowerCase();
     if (!user_address) return res.status(400).json({ error: 'user_address is required' });
 
     const { data: all, error } = await supabase
@@ -116,9 +34,9 @@ router.get('/stats', async (req, res) => {
   }
 });
 
-router.get('/history', async (req, res) => {
+router.post('/history', async (req, res) => {
   try {
-    const user_address = String(req.query.user_address || '').toLowerCase();
+    const user_address = String((req.body?.user_address) || '').toLowerCase();
     if (!user_address) return res.status(400).json({ error: 'user_address is required' });
 
     const { data, error } = await supabase
@@ -144,9 +62,9 @@ router.get('/history', async (req, res) => {
   }
 });
 
-router.get('/cost', async (req, res) => {
+router.post('/cost', async (req, res) => {
   try {
-    const user_address = String(req.query.user_address || '').toLowerCase();
+    const user_address = String((req.body?.user_address) || '').toLowerCase();
     if (!user_address) return res.status(400).json({ error: 'user_address is required' });
 
     const { data, error } = await supabase
