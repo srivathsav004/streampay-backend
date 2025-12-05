@@ -2,6 +2,7 @@
 import express from 'express';
 import { supabase } from './db.js';
 import aiRouter from './ai.js';
+import storageRouter from './storage.js';
 
 const router = express.Router();
 
@@ -11,6 +12,7 @@ router.get('/health', (req, res) => {
 });
 
 router.use('/ai', aiRouter);
+router.use('/storage', storageRouter);
 
 // Upsert a user profile by address (per schema: id, address, created_at)
 router.post('/users/upsert', async (req, res) => {
