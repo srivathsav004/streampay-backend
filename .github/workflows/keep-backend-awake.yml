@@ -3,7 +3,7 @@ name: Keep Render Backend Awake
 # Schedule to run automatically
 on:
   schedule:
-    - cron: '*/5 * * * *'  # every 10 minutes
+    - cron: '*/5 * * * *'  # every 5 minutes
   workflow_dispatch:        # optional manual trigger
 
 jobs:
@@ -13,7 +13,7 @@ jobs:
     steps:
       - name: Ping Render backend
         run: |
-          RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" https://streampay-backend-4nip.onrender.com/health)
+          RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" https://streampay-backend-y3oj.onrender.com/health)
           echo "Pinged backend. Response code: $RESPONSE"
           
           # Check if the response is successful (200-299)
